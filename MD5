@@ -1,0 +1,16 @@
+aed33399d1672adfb0bc64e72a9be224 *DESCRIPTION
+8b5df6728acd018cb1fa6f4d178c192a *NAMESPACE
+b0256621bb8ffedbf3f51267fb44e381 *R/cinbag.default.R
+f5ae7d2ee8a8884d7d4344a5c2699c8a *R/trimTrees.default.R
+2173d4a2dba8b1d841df152209287905 *man/cinbag.Rd
+115eb47f1ad27c64493c9c249d7fc875 *man/hitRate.Rd
+cf49d56792ef3cbf9d4e292809e627bb *man/trimTrees.Rd
+bbbce11b132256b5d5cf1d2e11ed4c1d *src/classTree.c
+ae595f53f19e393952f9615615891c41 *src/regTree.c
+a7f6b162f9b2c4d530ce61def7c7a3f0 *src/regrfmod.c
+2326f54dbe8953a4da5b83ad40750f0a *src/rf.h
+5d2d945384be0a0295d13b1a20dd0af4 *src/rfmod.c
+9c9adf5f9a2ec8ea1db5d688166221f9 *src/rfsub.f
+ed25324cc43d43fb9fd858db97823a1d *src/rfutils.c
+0c579e9dca6cf7b1be461fe61694a480 *src/trimTreesCDF.c
+4ee457aefce14e3ca1855fab28e80632 *src/trimTreesMA.c
