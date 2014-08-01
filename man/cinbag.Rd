@@ -38,7 +38,7 @@
   \item{mtry}{Number of variables randomly sampled as candidates at each
     split.  Note that the default values are different for
     classification (sqrt(p) where p is number of variables in \code{x})
-    and regression (p/3)}
+    and regression (p/3).}
   \item{replace}{Should sampling of cases be done with or without
     replacement?}
   \item{classwt}{Priors of the classes.  Need not add up to one.
@@ -93,7 +93,6 @@
 
 \value{An object of class \code{randomForest}, which is a list with the
   following components:
-
   \item{call}{the original call to \code{randomForest}}
   \item{type}{one of \code{regression}, \code{classification}, or
     \code{unsupervised}.}
@@ -134,7 +133,6 @@
     \code{randomForest} is called, a matrix of proximity measures among
     the input (based on the frequency that pairs of data points are in
     the same terminal nodes).}
-
   \item{mse}{(regression only) vector of mean square errors: sum of squared
     residuals divided by \code{n}.}
   \item{rsq}{(regression only) ``pseudo R-squared'': 1 - \code{mse} /
@@ -152,42 +150,17 @@
 }
 
 
-\note{
-  \code{cinbag}'s source files call the C functions \code{classRFmod.c} and \code{regRFmod.c}, which are slightly modified versions of the \code{randomForest}'s source files \code{classRF.c} and \code{regRF.c}, respectively. 
-  
-  The \code{forest} structure is slightly different between
-  classification and regression.  For details on how the trees are
-  stored, see the help page for \code{\link{getTree}}.
-
-  If \code{xtest} is given, prediction of the test set is done ``in
-  place'' as the trees are grown.  If \code{ytest} is also given, and
-  \code{do.trace} is set to some positive integer, then for every
-  \code{do.trace} trees, the test set error is printed.  Results for the
-  test set is returned in the \code{test} component of the resulting
-  \code{randomForest} object.  For classification, the \code{votes}
-  component (for training or test set data) contain the votes the cases
-  received for the classes.  If \code{norm.votes=TRUE}, the fraction is
-  given, which can be taken as predicted probabilities for the classes.
-
-  For large data sets, especially those with large number of variables,
-  calling \code{randomForest} via the formula interface is not advised:
-  There may be too much overhead in handling the formula.
-
-  The ``local'' (or casewise) variable importance is computed as
-  follows:  For classification, it is the increase in percent of times a
-  case is OOB and misclassified when the variable is permuted.  For
-  regression, it is the average increase in squared OOB residuals when
-  the variable is permuted.
-}
+\note{\code{cinbag}'s source files call the C functions \code{classRFmod.c} and \code{regRFmod.c}, which are slightly modified versions of the \code{randomForest}'s source files \code{classRF.c} and \code{regRF.c}, respectively.}
 
 \references{
   Breiman L (2001). Random forests. Machine Learning 45 5-32.
 
   Breiman L (2002). Manual on setting up, using, and understanding random forests V3.1. \url{http://oz.berkeley.edu/users/breiman/Using_random_forests_V3.1.pdf}.
 }
+
 \author{Yael Grushka-Cockayne, Victor Richmond R. Jose, Kenneth C. Lichtendahl Jr. and Huanghui Zeng, based on the source code from the randomForest package by Andy Liaw and Matthew Wiener and on the original Fortran code by Leo Breiman and Adele Cutler.}
 
-\seealso{\code{\link{predict.randomForest}}, \code{\link{varImpPlot}}, \code{\link{trimTrees}}, \code{\link{hitRate}}}
+\seealso{\code{\link{trimTrees}}, \code{\link{hitRate}}}
 \examples{
 # Load the data
 set.seed(201) # Can be removed; useful for replication
@@ -207,7 +180,6 @@ set.seed(201) # Can be removed; useful for replication
 rf <- cinbag(xtrain, ytrain, ntree=500, nodesize=5, mtry=3, keep.inbag=TRUE)
 rf$inbag[,1] # First tree's inbag indicators 
 rf$inbagCount[,1] # First tree's inbag counts
-
 }
 
 % Add one or more standard keywords, see file 'KEYWORDS' in the

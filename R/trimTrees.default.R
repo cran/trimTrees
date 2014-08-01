@@ -6,13 +6,13 @@
 # and the interval of interest. 
 # ----------------------------------------------------------------
 
-
 "hitRate" <- function(matrixPIT, interval=c(0.25,0.75)){
+  if(any(is.na(matrixPIT))) stop("NAs not permitted in matrixPIT.")
   matrixPIT <- as.matrix(matrixPIT)
   numberOfForecasters <- ncol(matrixPIT)
   numberOfForecasts <- nrow(matrixPIT)
   HR <- rep(0,numberOfForecasters)
-  for (i in 1:numberOfForecasters){
+  for(i in 1:numberOfForecasters){
     HR[i] <- sum((matrixPIT[,i]>=interval[1]) & (matrixPIT[,i]<=interval[2]))/numberOfForecasts
   }
   return(HR)
@@ -26,7 +26,7 @@
   function(xtrain,
            ytrain, 
            xtest,
-           ytest,
+           ytest=NULL,
            ntree=500,
            mtry=if (!is.null(ytrain) && !is.factor(ytrain))
              max(floor(ncol(xtrain)/3), 1) else floor(sqrt(ncol(xtrain))),
@@ -36,13 +36,18 @@
            uQuantiles = seq(0.05,0.95,0.05), 
            methodIsCDF=TRUE) {
     
-    ## Some checks 
-    if(! class(ytest) %in% c("numeric","integer", "factor") )
-      stop("ytest must be numeric or factor.")
-    
+    ## Some checks  
     if(is.null(nrow(xtest)) || is.null(ncol(xtest)))
       stop("xtest contains no data.")
-   
+    
+    if(is.null(ytest)){
+      ytest <- rep(0,nrow(xtest))
+      isytestNull <- TRUE
+    } else isytestNull <- FALSE
+    
+    if(! class(ytest) %in% c("numeric","integer", "factor") )
+      stop("ytest must be numeric or factor.")
+       
     testdat <- !is.null(xtest)
     if (testdat) {
       if (ncol(xtrain) != ncol(xtest))
@@ -75,7 +80,7 @@
           # Run cinbag (i.e., a modified version of random forest) to get the inbag counts.
           rf <- cinbag(xtrain, ytrain, ntree=ntree, nodesize=nodesize, mtry=mtry, keep.inbag=TRUE)
           inbagCount <- rf$inbagCount
-          # Find the terminal node numbers for the training rows and one new_X.
+          # Find the terminal node numbers for the training and testing rows.
           # You can use predict on the object rf.  cinbag outputs a "random forest" object.
           termNodetrain <- attr(predict(rf,xtrain,nodes=TRUE),"nodes")
           termNodeNewX <- attr(predict(rf,xtest,nodes=TRUE),"nodes")
@@ -106,15 +111,6 @@
           # Initialize ensemble outputs.
           bracketingRate <- rep(0,ntest)
           bracketingRateAllPairs <- matrix(0,ntree,ntree)
-          rfClassEnsembleCDFs <- matrix(0,ntest,nSupport + 1)
-          if(rf$type=="classification"){
-              rfProbForecasts <- predict(rf,xtest,type="prob")
-              rfClassEnsembleCDFs[,-1] <- rfProbForecasts
-          }
-          rfClassEnsembleCDFs <- t(apply(rfClassEnsembleCDFs,1,cumsum))
-          rfClassEnsembleQuantiles <- rep(0,nQuantiles)
-          rfClassEnsembleComponentScores <- matrix(0,nQuantiles,2)
-          rfClassEnsembleScores <- matrix(0,ntest,3)
           trimmedEnsembleCDFs <- matrix(0,ntest,nSupport + 1)
           trimmedEnsemblePMFs <- matrix(0,ntest,nSupport)
           trimmedEnsembleMeans <- rep(0,ntest)
@@ -132,126 +128,138 @@
           untrimmedEnsembleComponentScores <- matrix(0,nQuantiles,2)
           untrimmedEnsembleScores <- matrix(0,ntest,4)  
           
-          if(methodIsCDF == 0){
-          ttout <- .C("trimTreesMA",
+          tol <- 5*.Machine$double.eps
           
-                # random forest inputs.
-                as.integer(inbagCountSorted),
-                as.integer(termNodetrainSorted),
-                as.integer(ntree), 
-                as.double(ytrainSorted),
-                as.integer(ntrain),
-                forestSupport=as.double(forestSupport),
-                as.integer(nSupport),           
-                as.integer(termNodeNewX), 
-                as.double(ytest),
-                as.integer(ntest),
-                
-                # user inputs.
-                as.double(trim),
-                as.logical(trimIsExterior),
-                as.double(uQuantiles),
-                as.integer(nQuantiles),
-                              
-                # tree outputs.
-                treeValues=as.double(treeValues),
-                treeCounts=as.double(treeCounts),
-                treeCumCounts=as.double(treeCumCounts),
-                treeCDFs=as.double(treeCDFs),
-                treePMFs=as.double(treePMFs),
-                treeMeans=as.double(treeMeans),
-                treeVars=as.double(treeVars),
-                treePITs=as.double(treePITs),
-                treeQuantiles=as.double(treeQuantiles),
-                treeFirstPMFValues=as.double(treeFirstPMFValues),      
-                
-                # ensemble outputs.
-                bracketingRate=as.double(bracketingRate),     
-                bracketingRateAllPairs=as.double(bracketingRateAllPairs),
-                rfClassEnsembleCDFs=as.double(rfClassEnsembleCDFs),
-                rfClassEnsembleQuantiles=as.double(rfClassEnsembleQuantiles),
-                rfClassEnsembleComponentScores=as.double(rfClassEnsembleComponentScores),
-                rfClassEnsembleScores=as.double(rfClassEnsembleScores),
-                
-                trimmedEnsembleCDFs=as.double(trimmedEnsembleCDFs),
-                trimmedEnsemblePMFs=as.double(trimmedEnsemblePMFs),
-                trimmedEnsembleMeans=as.double(trimmedEnsembleMeans),
-                trimmedEnsembleVars=as.double(trimmedEnsembleVars),
-                trimmedEnsemblePITs=as.double(trimmedEnsemblePITs),
-                trimmedEnsembleQuantiles=as.double(trimmedEnsembleQuantiles),
-                trimmedEnsembleComponentScores=as.double(trimmedEnsembleComponentScores),
-                trimmedEnsembleScores=as.double(trimmedEnsembleScores),
-                
-                untrimmedEnsembleCDFs=as.double(untrimmedEnsembleCDFs),
-                untrimmedEnsemblePMFs=as.double(untrimmedEnsemblePMFs),
-                untrimmedEnsembleMeans=as.double(untrimmedEnsembleMeans),
-                untrimmedEnsembleVars=as.double(untrimmedEnsembleVars),
-                untrimmedEnsemblePITs=as.double(untrimmedEnsemblePITs),
-                untrimmedEnsembleQuantiles=as.double(untrimmedEnsembleQuantiles),
-                untrimmedEnsembleComponentScores=as.double(untrimmedEnsembleComponentScores),
-                untrimmedEnsembleScores=as.double(untrimmedEnsembleScores)
-           )
+          if(methodIsCDF){
+            ttout <- .C("trimTreesCDF",
+                        
+                        # random forest inputs.
+                        as.integer(inbagCountSorted),
+                        as.integer(termNodetrainSorted),
+                        as.integer(ntree), 
+                        as.double(ytrainSorted),
+                        as.integer(ntrain),
+                        forestSupport=as.double(forestSupport),
+                        as.integer(nSupport),           
+                        as.integer(termNodeNewX), 
+                        as.double(ytest),
+                        as.integer(ntest),
+                        
+                        # user inputs.
+                        as.double(trim),
+                        as.logical(trimIsExterior),
+                        as.double(uQuantiles),
+                        as.integer(nQuantiles),
+                        
+                        # tree outputs.
+                        treeValues=as.double(treeValues),
+                        treeCounts=as.double(treeCounts),
+                        treeCumCounts=as.double(treeCumCounts),
+                        treeCDFs=as.double(treeCDFs),
+                        treePMFs=as.double(treePMFs),
+                        treeMeans=as.double(treeMeans),
+                        treeVars=as.double(treeVars),
+                        treePITs=as.double(treePITs),
+                        treeQuantiles=as.double(treeQuantiles),
+                        treeFirstPMFValues=as.double(treeFirstPMFValues),      
+                        
+                        # ensemble outputs.
+                        bracketingRate=as.double(bracketingRate),     
+                        bracketingRateAllPairs=as.double(bracketingRateAllPairs),
+                 
+                        trimmedEnsembleCDFs=as.double(trimmedEnsembleCDFs),
+                        trimmedEnsemblePMFs=as.double(trimmedEnsemblePMFs),
+                        trimmedEnsembleMeans=as.double(trimmedEnsembleMeans),
+                        trimmedEnsembleVars=as.double(trimmedEnsembleVars),
+                        trimmedEnsemblePITs=as.double(trimmedEnsemblePITs),
+                        trimmedEnsembleQuantiles=as.double(trimmedEnsembleQuantiles),
+                        trimmedEnsembleComponentScores=as.double(trimmedEnsembleComponentScores),
+                        trimmedEnsembleScores=as.double(trimmedEnsembleScores),
+                        
+                        untrimmedEnsembleCDFs=as.double(untrimmedEnsembleCDFs),
+                        untrimmedEnsemblePMFs=as.double(untrimmedEnsemblePMFs),
+                        untrimmedEnsembleMeans=as.double(untrimmedEnsembleMeans),
+                        untrimmedEnsembleVars=as.double(untrimmedEnsembleVars),
+                        untrimmedEnsemblePITs=as.double(untrimmedEnsemblePITs),
+                        untrimmedEnsembleQuantiles=as.double(untrimmedEnsembleQuantiles),
+                        untrimmedEnsembleComponentScores=as.double(untrimmedEnsembleComponentScores),
+                        untrimmedEnsembleScores=as.double(untrimmedEnsembleScores),
+                        
+                        tol=as.double(tol),
+                        PACKAGE="trimTrees"
+            )
+          
           }
           else{
-          ttout <- .C("trimTreesCDF",
-                    
-                    # random forest inputs.
-                    as.integer(inbagCountSorted),
-                    as.integer(termNodetrainSorted),
-                    as.integer(ntree), 
-                    as.double(ytrainSorted),
-                    as.integer(ntrain),
-                    forestSupport=as.double(forestSupport),
-                    as.integer(nSupport),           
-                    as.integer(termNodeNewX), 
-                    as.double(ytest),
-                    as.integer(ntest),
-                    
-                    # user inputs.
-                    as.double(trim),
-                    as.logical(trimIsExterior),
-                    as.double(uQuantiles),
-                    as.integer(nQuantiles),
-                    
-                    # tree outputs.
-                    treeValues=as.double(treeValues),
-                    treeCounts=as.double(treeCounts),
-                    treeCumCounts=as.double(treeCumCounts),
-                    treeCDFs=as.double(treeCDFs),
-                    treePMFs=as.double(treePMFs),
-                    treeMeans=as.double(treeMeans),
-                    treeVars=as.double(treeVars),
-                    treePITs=as.double(treePITs),
-                    treeQuantiles=as.double(treeQuantiles),
-                    treeFirstPMFValues=as.double(treeFirstPMFValues),      
-                    
-                    # ensemble outputs.
-                    bracketingRate=as.double(bracketingRate),     
-                    bracketingRateAllPairs=as.double(bracketingRateAllPairs),
-                    rfClassEnsembleCDFs=as.double(rfClassEnsembleCDFs),
-                    rfClassEnsembleQuantiles=as.double(rfClassEnsembleQuantiles),
-                    rfClassEnsembleComponentScores=as.double(rfClassEnsembleComponentScores),
-                    rfClassEnsembleScores=as.double(rfClassEnsembleScores),
-                    
-                    trimmedEnsembleCDFs=as.double(trimmedEnsembleCDFs),
-                    trimmedEnsemblePMFs=as.double(trimmedEnsemblePMFs),
-                    trimmedEnsembleMeans=as.double(trimmedEnsembleMeans),
-                    trimmedEnsembleVars=as.double(trimmedEnsembleVars),
-                    trimmedEnsemblePITs=as.double(trimmedEnsemblePITs),
-                    trimmedEnsembleQuantiles=as.double(trimmedEnsembleQuantiles),
-                    trimmedEnsembleComponentScores=as.double(trimmedEnsembleComponentScores),
-                    trimmedEnsembleScores=as.double(trimmedEnsembleScores),
-                    
-                    untrimmedEnsembleCDFs=as.double(untrimmedEnsembleCDFs),
-                    untrimmedEnsemblePMFs=as.double(untrimmedEnsemblePMFs),
-                    untrimmedEnsembleMeans=as.double(untrimmedEnsembleMeans),
-                    untrimmedEnsembleVars=as.double(untrimmedEnsembleVars),
-                    untrimmedEnsemblePITs=as.double(untrimmedEnsemblePITs),
-                    untrimmedEnsembleQuantiles=as.double(untrimmedEnsembleQuantiles),
-                    untrimmedEnsembleComponentScores=as.double(untrimmedEnsembleComponentScores),
-                    untrimmedEnsembleScores=as.double(untrimmedEnsembleScores)
-          )
+            ttout <- .C("trimTreesMA",
+                        
+                        # random forest inputs.
+                        as.integer(inbagCountSorted),
+                        as.integer(termNodetrainSorted),
+                        as.integer(ntree), 
+                        as.double(ytrainSorted),
+                        as.integer(ntrain),
+                        forestSupport=as.double(forestSupport),
+                        as.integer(nSupport),           
+                        as.integer(termNodeNewX), 
+                        as.double(ytest),
+                        as.integer(ntest),
+                        
+                        # user inputs.
+                        as.double(trim),
+                        as.logical(trimIsExterior),
+                        as.double(uQuantiles),
+                        as.integer(nQuantiles),
+                        
+                        # tree outputs.
+                        treeValues=as.double(treeValues),
+                        treeCounts=as.double(treeCounts),
+                        treeCumCounts=as.double(treeCumCounts),
+                        treeCDFs=as.double(treeCDFs),
+                        treePMFs=as.double(treePMFs),
+                        treeMeans=as.double(treeMeans),
+                        treeVars=as.double(treeVars),
+                        treePITs=as.double(treePITs),
+                        treeQuantiles=as.double(treeQuantiles),
+                        treeFirstPMFValues=as.double(treeFirstPMFValues),      
+                        
+                        # ensemble outputs.
+                        bracketingRate=as.double(bracketingRate),     
+                        bracketingRateAllPairs=as.double(bracketingRateAllPairs),
+                        
+                        trimmedEnsembleCDFs=as.double(trimmedEnsembleCDFs),
+                        trimmedEnsemblePMFs=as.double(trimmedEnsemblePMFs),
+                        trimmedEnsembleMeans=as.double(trimmedEnsembleMeans),
+                        trimmedEnsembleVars=as.double(trimmedEnsembleVars),
+                        trimmedEnsemblePITs=as.double(trimmedEnsemblePITs),
+                        trimmedEnsembleQuantiles=as.double(trimmedEnsembleQuantiles),
+                        trimmedEnsembleComponentScores=as.double(trimmedEnsembleComponentScores),
+                        trimmedEnsembleScores=as.double(trimmedEnsembleScores),
+                        
+                        untrimmedEnsembleCDFs=as.double(untrimmedEnsembleCDFs),
+                        untrimmedEnsemblePMFs=as.double(untrimmedEnsemblePMFs),
+                        untrimmedEnsembleMeans=as.double(untrimmedEnsembleMeans),
+                        untrimmedEnsembleVars=as.double(untrimmedEnsembleVars),
+                        untrimmedEnsemblePITs=as.double(untrimmedEnsemblePITs),
+                        untrimmedEnsembleQuantiles=as.double(untrimmedEnsembleQuantiles),
+                        untrimmedEnsembleComponentScores=as.double(untrimmedEnsembleComponentScores),
+                        untrimmedEnsembleScores=as.double(untrimmedEnsembleScores),
+                        
+                        tol=as.double(tol),
+                        PACKAGE="trimTrees"
+            )
        }
+        if(isytestNull){
+          ttout$treePITs <- rep(NA,ntest*ntree)
+          ttout$bracketingRate <- rep(NA, ntest)
+          ttout$bracketingRateAllPairs <- rep(NA, ntree*ntree)
+          ttout$trimmedEnsemblePITs <- rep(NA, ntest)
+          ttout$trimmedEnsembleComponentScores <- rep(NA,nQuantiles*2)
+          ttout$trimmedEnsembleScores <- rep(NA,ntest*4)
+          ttout$untrimmedEnsemblePITs <- rep(NA, ntest)
+          ttout$untrimmedEnsembleComponentScores <-rep(NA,nQuantiles*2)
+          ttout$untrimmedEnsembleScores <- rep(NA, ntest*4)
+        }
           out <- list(forestSupport=forestSupport,
                       treeValues = matrix(ttout$treeValues,ntrain,ntree),
                       treeCounts = matrix(ttout$treeCounts,nSupport,ntree),
@@ -265,10 +273,6 @@
                       treeFirstPMFValues = matrix(ttout$treeFirstPMFValues,ntest,ntree),
                       bracketingRate = ttout$bracketingRate,
                       bracketingRateAllPairs = matrix(ttout$bracketingRateAllPairs,ntree,ntree),
-                      rfClassEnsembleCDFs = matrix(ttout$rfClassEnsembleCDFs,ntest,nSupport + 1),
-                      rfClassEnsembleQuantiles = ttout$rfClassEnsembleQuantiles,
-                      rfClassEnsembleComponentScores = matrix(ttout$rfClassEnsembleComponentScores,nQuantiles,2),
-                      rfClassEnsembleScores = matrix(ttout$rfClassEnsembleScores,ntest,3, dimnames=list(seq(1,ntest,1), c("LinQuanS", "LogQuanS", "RPS"))),
                       trimmedEnsembleCDFs = matrix(ttout$trimmedEnsembleCDFs,ntest,nSupport + 1),
                       trimmedEnsemblePMFs = matrix(ttout$trimmedEnsemblePMFs,ntest,nSupport),
                       trimmedEnsembleMeans = ttout$trimmedEnsembleMeans,

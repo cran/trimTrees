@@ -28,9 +28,9 @@ void regRFmod(double *x, double *y, int *xdim, int *sampsize,
            double *upper, double *mse, int *keepf, int *replace,
            int *testdat, double *xts, int *nts, double *yts, int *labelts,
            double *yTestPred, double *proxts, double *msets, double *coef,
-		   int *nout, int *inbag, 
-       int *inbagCount /*** Added code ***/) {
-         
+           int *nout, int *inbag, 
+           int *inbagCount /*** Added code ***/) {
+                      
 /*** Note: the name of this function, regRFmod, has been changed from the original regRF. ***/    
     
     /*************************************************************************
@@ -62,9 +62,9 @@ void regRFmod(double *x, double *y, int *xdim, int *sampsize,
         nsample, mdim, keepF, keepInbag;
     int *oobpair, varImp, localImp, *varUsed;
 
-	  int *in, *nind, *nodex, *nodexts; 
+    int *in, *nind, *nodex, *nodexts;
     int *inCount; /*** Added code ***/
-  
+
     nsample = xdim[0];
     mdim = xdim[1];
     ntest = *nts;
@@ -82,8 +82,8 @@ void regRFmod(double *x, double *y, int *xdim, int *sampsize,
     xtmp       = (double *) S_alloc(nsample, sizeof(double));
     resOOB     = (double *) S_alloc(nsample, sizeof(double));
 
-    in         = (int *) S_alloc(nsample, sizeof(int));
-	  inCount    = (int *) S_alloc(nsample, sizeof(int)); /*** Added code ***/
+    in        = (int *) S_alloc(nsample, sizeof(int));
+    inCount    = (int *) S_alloc(nsample, sizeof(int)); /*** Added code ***/
     nodex      = (int *) S_alloc(nsample, sizeof(int));
     varUsed    = (int *) S_alloc(mdim, sizeof(int));
     nind = *replace ? NULL : (int *) S_alloc(nsample, sizeof(int));
@@ -150,7 +150,7 @@ void regRFmod(double *x, double *y, int *xdim, int *sampsize,
     for (j = 0; j < *nTree; ++j) {
 		idx = keepF ? j * *nrnodes : 0;
 		zeroInt(in, nsample);
-		zeroInt(inCount, nsample); /*** Added code ***/
+    zeroInt(inCount, nsample); /*** Added code ***/
         zeroInt(varUsed, mdim);
         /* Draw a random sample for growing a tree. */
 		if (*replace) { /* sampling with replacement */
@@ -158,7 +158,7 @@ void regRFmod(double *x, double *y, int *xdim, int *sampsize,
 				xrand = unif_rand();
 				k = xrand * nsample;
 				in[k] = 1;
-				inCount[k] = inCount[k] + 1; /*** Added code ***/
+        inCount[k] = inCount[k] + 1; /*** Added code ***/
 				yb[n] = y[k];
 				for(m = 0; m < mdim; ++m) {
 					xb[m + n * mdim] = x[m + k * mdim];
@@ -173,7 +173,7 @@ void regRFmod(double *x, double *y, int *xdim, int *sampsize,
                 swapInt(nind[ktmp], nind[last]);
 				last--;
 				in[k] = 1;
-				inCount[k] = 1; /*** Added code ***/
+        inCount[k] = 1; /*** Added code ***/
 				yb[n] = y[k];
 				for(m = 0; m < mdim; ++m) {
 					xb[m + n * mdim] = x[m + k * mdim];
@@ -182,8 +182,8 @@ void regRFmod(double *x, double *y, int *xdim, int *sampsize,
 		}
 		if (keepInbag) {
 			for (n = 0; n < nsample; ++n) {
-				inbag[n + j * nsample] = in[n];
-				inbagCount[n + j * nsample] = inCount[n]; /*** Added code ***/
+        inbag[n + j * nsample] = in[n];
+        inbagCount[n + j * nsample] = inCount[n]; /*** Added code ***/
 			}
 		}
         /* grow the regression tree */
@@ -322,7 +322,7 @@ void regRFmod(double *x, double *y, int *xdim, int *sampsize,
     if (*doProx) {
 		for (n = 0; n < nsample; ++n) {
 			for (k = n + 1; k < nsample; ++k) {
-                prox[nsample*k + n] /= oobprox ?
+                prox[nsample*k + n] /= *oobprox ?
                     (oobpair[nsample*k + n] > 0 ? oobpair[nsample*k + n] : 1) :
                     *nTree;
                 prox[nsample * n + k] = prox[nsample * k + n];

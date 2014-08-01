@@ -1,7 +1,7 @@
 # ----------------------------------------------------------------
 # R function: cinbag
 # ----------------------------------------------------------------
-# This function modifies randomForest to return the number of times 
+# This function modifies randomForest 4.6.10 to return the number of times 
 # a row appears in a tree's bag.  The R function cinbag calls the 
 # C functions classRFmod and regRFmod, which are modified versions 
 # of classRF and regRF, respectively.  cinbag returns a 
@@ -15,40 +15,40 @@
 mylevels <- function(x) if (is.factor(x)) levels(x) else 0
 
 "cinbag" <-
-  function(x, y=NULL,  xtest=NULL, ytest=NULL, ntree=500,
-           mtry=if (!is.null(y) && !is.factor(y))
+    function(x, y=NULL,  xtest=NULL, ytest=NULL, ntree=500,
+             mtry=if (!is.null(y) && !is.factor(y))
              max(floor(ncol(x)/3), 1) else floor(sqrt(ncol(x))),
-           replace=TRUE, classwt=NULL, cutoff, strata,
-           sampsize = if (replace) nrow(x) else ceiling(.632*nrow(x)),
-           nodesize = if (!is.null(y) && !is.factor(y)) 5 else 1,
-           maxnodes=NULL,
-           importance=FALSE, localImp=FALSE, nPerm=1,
-           proximity, oob.prox=proximity,
-           norm.votes=TRUE, do.trace=FALSE,
-           keep.forest=!is.null(y) && is.null(xtest), corr.bias=FALSE,
-           keep.inbag=FALSE, ...) {
+             replace=TRUE, classwt=NULL, cutoff, strata,
+             sampsize = if (replace) nrow(x) else ceiling(.632*nrow(x)),
+             nodesize = if (!is.null(y) && !is.factor(y)) 5 else 1,
+             maxnodes=NULL,
+             importance=FALSE, localImp=FALSE, nPerm=1,
+             proximity, oob.prox=proximity,
+             norm.votes=TRUE, do.trace=FALSE,
+             keep.forest=!is.null(y) && is.null(xtest), corr.bias=FALSE,
+             keep.inbag=FALSE, ...) {
     addclass <- is.null(y)
     classRF <- addclass || is.factor(y)
     if (!classRF && length(unique(y)) <= 5) {
-      warning("The response has five or fewer unique values.  Are you sure you want to do regression?")
+        warning("The response has five or fewer unique values.  Are you sure you want to do regression?")
     }
     if (classRF && !addclass && length(unique(y)) < 2)
-      stop("Need at least two classes to do classification.")
+        stop("Need at least two classes to do classification.")
     n <- nrow(x)
     p <- ncol(x)
     if (n == 0) stop("data (x) has 0 rows")
     x.row.names <- rownames(x)
     x.col.names <- if (is.null(colnames(x))) 1:ncol(x) else colnames(x)
-    
+
     ## overcome R's lazy evaluation:
     keep.forest <- keep.forest
-    
+
     testdat <- !is.null(xtest)
     if (testdat) {
-      if (ncol(x) != ncol(xtest))
-        stop("x and xtest must have same number of columns")
-      ntest <- nrow(xtest)
-      xts.row.names <- rownames(xtest)
+        if (ncol(x) != ncol(xtest))
+            stop("x and xtest must have same number of columns")
+        ntest <- nrow(xtest)
+        xts.row.names <- rownames(xtest)
     }
 
     ## Make sure mtry is in reasonable range.
@@ -96,8 +96,8 @@ mylevels <- function(x) if (is.factor(x)) levels(x) else 0
         xlevels <- as.list(rep(0, p))
     }
     maxcat <- max(ncat)
-    if (maxcat > 32)
-        stop("Can not handle categorical predictors with more than 32 categories.")
+    if (maxcat > 53)
+        stop("Can not handle categorical predictors with more than 53 categories.")
 
     if (classRF) {
         nclass <- length(levels(y))
@@ -279,11 +279,11 @@ mylevels <- function(x) if (is.factor(x)) levels(x) else 0
                     # Added code
                     # --------------------------------------------------
                     inbagCount = if (keep.inbag)
-                      matrix(integer(n * ntree), n) else integer(n)#,
+                      matrix(integer(n * ntree), n) else integer(n),
                     # --------------------------------------------------
                     
-                    #DUP=FALSE ,
-                    #PACKAGE="randomForest"
+                    #DUP=FALSE,
+                    PACKAGE="trimTrees"
                     )[-1]
         if (keep.forest) {
             ## deal with the random forest outputs
@@ -381,7 +381,7 @@ mylevels <- function(x) if (is.factor(x)) levels(x) else 0
                     dimnames = list(xts.row.names, c(xts.row.names,
                     x.row.names))) else NULL),
                     inbag = if (keep.inbag) rfout$inbag else NULL,
-                    
+        
                     # --------------------------------------------------
                     # Added code
                     # --------------------------------------------------
@@ -389,6 +389,9 @@ mylevels <- function(x) if (is.factor(x)) levels(x) else 0
                     # --------------------------------------------------
                     )
     } else {
+		ymean <- mean(y)
+		y <- y - ymean
+		ytest <- ytest - ymean
         rfout <- .C("regRFmod",
                     x,
                     as.double(y),
@@ -404,7 +407,7 @@ mylevels <- function(x) if (is.factor(x)) levels(x) else 0
                     as.integer(do.trace),
                     as.integer(proximity),
                     as.integer(oob.prox),
-                    as.integer(corr.bias), #16
+                    as.integer(corr.bias),
                     ypred = double(n),
                     impout = impout,
                     impmat = impmat,
@@ -416,7 +419,7 @@ mylevels <- function(x) if (is.factor(x)) levels(x) else 0
                     rightDaughter = matrix(integer(nrnodes * nt), ncol=nt),
                     nodepred = matrix(double(nrnodes * nt), ncol=nt),
                     bestvar = matrix(integer(nrnodes * nt), ncol=nt),
-                    xbestsplit = matrix(double(nrnodes * nt), ncol=nt), #28
+                    xbestsplit = matrix(double(nrnodes * nt), ncol=nt),
                     mse = double(ntree),
                     keep = as.integer(c(keep.forest, keep.inbag)),
                     replace = as.integer(replace),
@@ -424,22 +427,22 @@ mylevels <- function(x) if (is.factor(x)) levels(x) else 0
                     xts = xtest,
                     ntest = as.integer(ntest),
                     yts = as.double(ytest),
-                    labelts = as.integer(labelts), #36
+                    labelts = as.integer(labelts),
                     ytestpred = double(ntest),
                     proxts = proxts,
                     msets = double(if (labelts) ntree else 1),
                     coef = double(2),
-                    oob.times = integer(n), #41
+                    oob.times = integer(n),
                     inbag = if (keep.inbag) matrix(integer(n * ntree), n) else integer(1),
                     
                     # --------------------------------------------------
                     # Added code
                     # --------------------------------------------------
-                    inbagCount = if (keep.inbag) matrix(integer(n * ntree), n) else integer(1)#,
+                    inbagCount = if (keep.inbag) matrix(integer(n * ntree), n) else integer(1),
                     # --------------------------------------------------
                     
                     #DUP=FALSE,
-                    # PACKAGE="randomForest"
+                    PACKAGE="trimTrees"
                     )#[c(16:28, 36:41)]
         ## Format the forest component, if present.
         if (keep.forest) {
@@ -449,7 +452,7 @@ mylevels <- function(x) if (is.factor(x)) levels(x) else 0
             rfout$bestvar <-
                 rfout$bestvar[1:max.nodes, , drop=FALSE]
             rfout$nodepred <-
-                rfout$nodepred[1:max.nodes, , drop=FALSE]
+                rfout$nodepred[1:max.nodes, , drop=FALSE] + ymean
             rfout$xbestsplit <-
                 rfout$xbestsplit[1:max.nodes, , drop=FALSE]
             rfout$leftDaughter <-
@@ -466,7 +469,7 @@ mylevels <- function(x) if (is.factor(x)) levels(x) else 0
         }
         out <- list(call = cl,
                     type = "regression",
-                    predicted = structure(ypred, names=x.row.names),
+                    predicted = structure(ypred + ymean, names=x.row.names),
                     mse = rfout$mse,
                     rsq = 1 - rfout$mse / (var(y) * (n-1) / n),
                     oob.times = rfout$oob.times,
@@ -481,7 +484,7 @@ mylevels <- function(x) if (is.factor(x)) levels(x) else 0
                                                x.row.names)) else NULL,
                     proximity = if (proximity) matrix(rfout$prox, n, n,
                     dimnames = list(x.row.names, x.row.names)) else NULL,
-                    ntree = ntree,
+                   ntree = ntree,
                     mtry = mtry,
                     forest = if (keep.forest)
                     c(rfout[c("ndbigtree", "nodestatus", "leftDaughter",
@@ -490,13 +493,13 @@ mylevels <- function(x) if (is.factor(x)) levels(x) else 0
                       list(ncat = ncat), list(nrnodes=max.nodes),
                       list(ntree=ntree), list(xlevels=xlevels)) else NULL,
                     coefs = if (corr.bias) rfout$coef else NULL,
-                    y = y,
+                    y = y + ymean,
                     test = if(testdat) {
-                        list(predicted = structure(rfout$ytestpred,
+                        list(predicted = structure(rfout$ytestpred + ymean,
                              names=xts.row.names),
                              mse = if(labelts) rfout$msets else NULL,
                              rsq = if(labelts) 1 - rfout$msets /
-                             (var(ytest) * (n-1) / n) else NULL,
+                                        (var(ytest) * (n-1) / n) else NULL,
                              proximity = if (proximity)
                              matrix(rfout$proxts / ntree, nrow = ntest,
                                     dimnames = list(xts.row.names,
@@ -505,17 +508,16 @@ mylevels <- function(x) if (is.factor(x)) levels(x) else 0
                     } else NULL,
                     inbag = if (keep.inbag)
                     matrix(rfout$inbag, nrow(rfout$inbag),
-                           dimnames=list(x.row.names, NULL)) else NULL
-                    ,
-        
-                    # --------------------------------------------------
-                    # Added code
-                    # --------------------------------------------------
-                    inbagCount = 
-                    if (keep.inbag)
-                    matrix(rfout$inbagCount, nrow(rfout$inbagCount),
-                            dimnames=list(x.row.names, NULL)) else NULL
-                    )
+                           dimnames=list(x.row.names, NULL)) else NULL,
+		
+                		# --------------------------------------------------
+                		# Added code
+                		# --------------------------------------------------
+                		inbagCount = 
+              		  if (keep.inbag)
+            		    matrix(rfout$inbagCount, nrow(rfout$inbagCount),
+      		                  dimnames=list(x.row.names, NULL)) else NULL
+                		)
                     # --------------------------------------------------
 
     }
@@ -524,5 +526,3 @@ mylevels <- function(x) if (is.factor(x)) levels(x) else 0
 }
 
 # End declaration of cinbag function
-
-

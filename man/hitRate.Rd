@@ -8,19 +8,19 @@ hitRate(matrixPIT, interval = c(0.25, 0.75))
 %- maybe also 'usage' for other objects documented here.
 \arguments{
   \item{matrixPIT}{
-  A \code{ntest}-by-\code{nForecaster} matrix of PIT values where \code{ntest} is the number of rows in the testing set and \code{nForecaster} is the number of forecasters.  Each column represents a different forecaster's PITs for the testing set.  A PIT value is the forecaster's cdf evaluated at the realization of the response in the testing set.
-}
-  \item{interval}{
-Prediction interval of interest.  The default \code{interval=c(0.25, 0.75)} is the central 50\% prediction interval.  
-}
+  A \code{ntest}-by-\code{nForecaster} matrix of PIT values where \code{ntest} is the number of rows in the testing set and \code{nForecaster} is the number of forecasters.  Each column represents a different forecaster's PITs for the testing set.  A PIT value is the forecaster's cdf evaluated at the realization of the response in the testing set.}
+
+\item{interval}{
+Prediction interval of interest.  The default \code{interval=c(0.25, 0.75)} is the central 50\% prediction interval.}
 }
 
 \value{
 \item{HR}{An \code{nForecaster} vector of empirical hit rates -- one for each forecaster.  A forecaster's empirical hit rate is the percentage of PIT values that fall within [\code{interval[1]},\code{interval[2]}], e.g., [0.25,0.75] according to the default.}
 }
 \references{
-Grushka-Cockayne Y, Jose VRR, Lichtendahl KC Jr. (2014). Ensembling overfit and overconfident forecasts, working paper.
+Grushka-Cockayne Y, Jose VRR, Lichtendahl KC Jr. (2014). Ensembles of overfit and overconfident forecasts, working paper.
 }
+
 \author{
 Yael Grushka-Cockayne, Victor Richmond R. Jose, Kenneth C. Lichtendahl Jr., and Huanghui Zeng.
 }
@@ -28,6 +28,7 @@ Yael Grushka-Cockayne, Victor Richmond R. Jose, Kenneth C. Lichtendahl Jr., and 
 \seealso{
 \code{\link{trimTrees}}, \code{\link{cinbag}}
 }
+
 \examples{
 # Load the data
 set.seed(201) # Can be removed; useful for replication
@@ -44,12 +45,12 @@ ytest <- test[,11]
       
 # Run trimTrees
 set.seed(201) # Can be removed; useful for replication
-trimming <- trimTrees(xtrain, ytrain, xtest, ytest,trim=0.15)
+tt <- trimTrees(xtrain, ytrain, xtest, ytest, trim=0.15)
 
 # Outputs from trimTrees
-mean(hitRate(trimming$treePITs))
-hitRate(trimming$trimmedEnsemblePITs)
-hitRate(trimming$untrimmedEnsemblePITs)
+mean(hitRate(tt$treePITs))
+hitRate(tt$trimmedEnsemblePITs)
+hitRate(tt$untrimmedEnsemblePITs)
 }
 % Add one or more standard keywords, see file 'KEYWORDS' in the
 % R documentation directory.

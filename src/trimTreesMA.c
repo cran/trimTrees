@@ -1,5 +1,21 @@
+/*******************************************************************
+   Copyright (C) 2014 Yael Grushka-Cockayne, Victor Richmond R. Jose, 
+   and Kenneth C. Lichtendahl Jr.
+
+   This program is free software; you can redistribute it and/or
+   modify it under the terms of the GNU General Public License
+   as published by the Free Software Foundation; either version 2
+   of the License, or (at your option) any later version.
+
+   This program is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+   GNU General Public License for more details.
+*******************************************************************/
+
 #include <Rmath.h>
 #include <R.h>
+#include <math.h>
 
 void zeroIntMA(int *x, int length) {
     memset(x, 0, length * sizeof(int));
@@ -43,12 +59,7 @@ void trimTreesMA(
           /* ensembles outputs. */
           double *bracketingRate,
           double *bracketingRateAllPairs,
-          
-          double *rfClassEnsembleCDFs,
-          double *rfClassEnsembleQuantiles,
-          double *rfClassEnsembleComponentScores,
-          double *rfClassEnsembleScores,
-        
+                    
           double *trimmedEnsembleCDFs,
           double *trimmedEnsemblePMFs,
           double *trimmedEnsembleMeans,
@@ -65,7 +76,9 @@ void trimTreesMA(
           double *untrimmedEnsemblePITs,
           double *untrimmedEnsembleQuantiles,
           double *untrimmedEnsembleComponentScores,
-          double *untrimmedEnsembleScores
+          double *untrimmedEnsembleScores,
+          
+          double *tol
           ) 
   
   {
@@ -96,7 +109,7 @@ void trimTreesMA(
   }  
 
   /* Start big loop over the rows in the test set. */
-  for(t = 1; t <= *ntest; t++) {
+  for(t = 0; t <= *ntest - 1; t++) {
       
     /* ------------
        TREE OUTPUTS
@@ -110,153 +123,160 @@ void trimTreesMA(
     zeroDoubleMA(treeCumCounts, (*nSupport + 1) * (*ntree));
     zeroDoubleMA(treeCDFs, (*nSupport + 1) * (*ntree));
     zeroDoubleMA(treePMFs, (*nSupport) * (*ntree));
-    for(i = 1; i <= *ntree; i++) {
-      k = 1;
-      for(j = 1; j <= *nSupport; j++) {
-        while(forestSupport[j - 1] == ytrainSorted[k - 1]) {
-          if(termNodetrainSorted[(i - 1) * (*ntrain) + k - 1] == termNodeNewX[(i - 1) * (*ntest) + t - 1] && inbagCountSorted[(i - 1) * (*ntrain) + k - 1] != 0) {
-            treeValues[(i - 1) * (*ntrain) + k - 1] =  ytrainSorted[k - 1];     
-            treeCounts[(i - 1) * (*nSupport) + j - 1] += inbagCountSorted[(i - 1) * (*ntrain) + k - 1];
-          } else treeValues[(i-1) * (*ntrain) + k - 1] =  NA_REAL;
+    for(i = 0; i <= *ntree - 1; i++) {
+      k = 0;
+      for(j = 0; j <= *nSupport - 1; j++) {
+        while(fabs(forestSupport[j] - ytrainSorted[k]) < *tol) {
+          if(termNodetrainSorted[i * (*ntrain) + k] == termNodeNewX[i * (*ntest) + t] && 
+             inbagCountSorted[i * (*ntrain) + k] != 0) {
+            treeValues[i * (*ntrain) + k] =  ytrainSorted[k];     
+            treeCounts[i * (*nSupport) + j] += inbagCountSorted[i * (*ntrain) + k];
+          } else treeValues[i * (*ntrain) + k] =  NA_REAL;
           k++;  
+          if(k > *ntrain - 1) break;
         }
-        treeCumCounts[(i - 1) * (*nSupport + 1) + j] = treeCumCounts[(i - 1) * (*nSupport + 1) + j - 1] + treeCounts[(i - 1) * (*nSupport) + j - 1];      
+        treeCumCounts[i * (*nSupport + 1) + j + 1] = treeCumCounts[i * (*nSupport + 1) + j] + treeCounts[i * (*nSupport) + j];      
       }
     }
   
     /* This loop finds the trees' cdfs. */
-    for(j = 1; j <= *nSupport; j++) {
-      for(i = 1; i <= *ntree; i++) {
-        treeCDFs[(i - 1) * (*nSupport + 1) + j] =  treeCumCounts[(i - 1) * (*nSupport + 1) + j] / treeCumCounts[(i - 1) * (*nSupport  + 1) + *nSupport];
-        treePMFs[(i - 1) * (*nSupport) + j - 1] =  treeCounts[(i - 1) * (*nSupport) + j - 1] / treeCumCounts[(i - 1) * (*nSupport  + 1) + *nSupport];
-        if(j == 1) treeFirstPMFValues[(i - 1) * (*ntest) + t - 1] = treePMFs[(i - 1) * (*nSupport)];
+    for(j = 0; j <= *nSupport - 1; j++) {
+      for(i = 0; i <= *ntree - 1; i++) {
+        treeCDFs[i * (*nSupport + 1) + j + 1] =  treeCumCounts[i * (*nSupport + 1) + j + 1] / treeCumCounts[i * (*nSupport  + 1) + *nSupport];
+        treePMFs[i * (*nSupport) + j] =  treeCounts[i * (*nSupport) + j] / treeCumCounts[i * (*nSupport  + 1) + *nSupport];
+        if(j == 0) treeFirstPMFValues[i * (*ntest) + t] = treePMFs[i * (*nSupport)];
       }
     }
             
     /*This loop calculates the trees' means and variances. */
-    for(i = 1; i <= *ntree; i++) {
-      for(j = 1; j <= *nSupport; j++) {
-        treeMeans[(i - 1) * (*ntest) + t - 1] +=  treePMFs[(i - 1) * (*nSupport) + j - 1] * forestSupport[j - 1]; 
-        treeVars[(i - 1) * (*ntest) + t - 1] +=  treePMFs[(i - 1) * (*nSupport) + j - 1] * forestSupport[j - 1] * forestSupport[j - 1];
+    for(i = 0; i <= *ntree - 1; i++) {
+      for(j = 0; j <= *nSupport - 1; j++) {
+        treeMeans[i * (*ntest) + t] +=  treePMFs[i * (*nSupport) + j] * forestSupport[j]; 
+        treeVars[i * (*ntest) + t] +=  treePMFs[i * (*nSupport) + j] * forestSupport[j] * forestSupport[j];
       }
-       treeVars[(i - 1) * (*ntest) + t - 1] -= (treeMeans[(i - 1) * (*ntest) + t - 1] * treeMeans[(i - 1) * (*ntest) + t - 1]);
+       treeVars[i * (*ntest) + t] -= (treeMeans[i * (*ntest) + t] * treeMeans[i * (*ntest) + t]);
     }
     
     /* This loop finds each tree's PIT.  */
-    for(i = 1; i <= *ntree; i++) {
-        if(ytest[t - 1] < forestSupport[0]) {
-          treePITs[(i - 1) * (*ntest) + t - 1] = 0;
+    for(i = 0; i <= *ntree - 1; i++) {
+        if(ytest[t] < forestSupport[0]) {
+          treePITs[i * (*ntest) + t] = 0;
         } else {
-        indexPIT = *nSupport;
-        while(ytest[t - 1] < forestSupport[indexPIT - 1])  indexPIT -= 1;
-        treePITs[(i - 1) * (*ntest) + t - 1] = treeCDFs[(i - 1) * (*nSupport + 1) + indexPIT];
+        indexPIT = *nSupport - 1;
+        while(ytest[t] < forestSupport[indexPIT])  indexPIT -= 1;
+        treePITs[i * (*ntest) + t] = treeCDFs[i * (*nSupport + 1) + indexPIT + 1];
         }
     }
     
     /* This loop finds the quantiles of each tree's cdf.  */  
     zeroDoubleMA(treeQuantiles, (*ntree) * (*nQuantiles));
-    for(i = 1; i <= *ntree; i++) {
+    for(i = 0; i <= *ntree - 1; i++) {
       zeroIntMA(index, *nQuantiles);
-      for(k = *nQuantiles; k >= 1; k--) {
-        if(k == *nQuantiles) index[k - 1] = *nSupport;
-        else index[k - 1] = index[k];
-        while(uQuantiles[k - 1] <= treeCDFs[(i - 1) * (*nSupport + 1) + index[k - 1]]) index[k - 1] -= 1;
-        treeQuantiles[(k - 1) * (*ntree) + i - 1] = forestSupport[index[k - 1]];
-        index[k - 1]++;
+      for(k = *nQuantiles - 1; k >= 0; k--) {
+        if(k == *nQuantiles - 1) index[k] = *nSupport - 1;
+        else index[k] = index[k + 1];
+        /* while condition is u <= cdf value */
+        while((uQuantiles[k] < treeCDFs[i * (*nSupport + 1) + index[k]]) ||   
+              (fabs(uQuantiles[k] - treeCDFs[i * (*nSupport + 1) + index[k]]) < *tol)
+             ) index[k] -= 1;
+        treeQuantiles[k * (*ntree) + i] = forestSupport[index[k]];
+        index[k]++;
       }
     }
     
     /* This loop calculates the bracketing rate among the trees, for each test value.  */  
     double countAbove;
     countAbove = 0;
-    for(i = 1; i <= *ntree; i++) {
-      if(treeMeans[(i - 1) * (*ntest) + t - 1] > ytest[t - 1])
-         countAbove ++;
-      }  
-    bracketingRate[t - 1] = 2* countAbove/ (double)(*ntree) *(1 - countAbove/ (double)(*ntree));
+    for(i = 0; i <= *ntree - 1; i++) {
+      if(treeMeans[i * (*ntest) + t] > ytest[t]) countAbove ++;
+    }  
+    bracketingRate[t] = 2* countAbove/ (double)(*ntree) *(1 - countAbove/ (double)(*ntree));
    
     /* This loop calculates the bracketing rate among each pair of trees, for each test value.  */
-     for(i = 1; i <= (*ntree-1); i++){
-       for(j = i + 1; j <= *ntree; j++){
-        if(treeMeans[(i - 1) * (*ntest) + t - 1] <= ytest[t - 1] && ytest[t - 1] <= treeMeans[(j - 1) * (*ntest) + t - 1])
-            bracketingRateAllPairs [(j - 1) * (*ntree) + i - 1] ++;
-        if(treeMeans[(i - 1) * (*ntest) + t - 1] >= ytest[t - 1] && ytest[t - 1] >= treeMeans[(j - 1) * (*ntest) + t - 1])
-            bracketingRateAllPairs [(j - 1) * (*ntree) + i - 1] ++;
-         }
-      } 
-/* --------------------------
+    for(i = 0; i <= *ntree - 2; i++){
+      for(j = i + 1; j <= *ntree - 1; j++){
+        if((treeMeans[i * (*ntest) + t] <= ytest[t]) && (ytest[t] <= treeMeans[j * (*ntest) + t]))
+          bracketingRateAllPairs [j * (*ntree) + i] ++;
+        if((treeMeans[i * (*ntest) + t] >= ytest[t]) && (ytest[t] >= treeMeans[j * (*ntest) + t]))
+          bracketingRateAllPairs [j * (*ntree) + i] ++;
+      }
+    } 
+
+    /* --------------------------
        UNTRIMMED ENSEMBLE OUTPUTS
        -------------------------- */
 
     /* This loop finds the untrimmed ensemble's cdf. */
-    for(j = 1; j <= *nSupport; j++) {
-      for(i = 1; i <= *ntree; i++) {
-      untrimmedEnsembleCDFs[j * (*ntest) +  t - 1] += treeCDFs[(i - 1) * (*nSupport + 1) + j] / (double)(*ntree);
+    for(j = 0; j <= *nSupport - 1; j++) {
+      for(i = 0; i <= *ntree - 1; i++) {
+      untrimmedEnsembleCDFs[(j + 1) * (*ntest) +  t] += treeCDFs[i * (*nSupport + 1) + j +  1] / (double)(*ntree);
       }
-      untrimmedEnsemblePMFs[(j - 1) * (*ntest) +  t - 1] = untrimmedEnsembleCDFs[j * (*ntest) +  t - 1] - untrimmedEnsembleCDFs[(j - 1) * (*ntest) +  t - 1];
+      untrimmedEnsemblePMFs[j * (*ntest) +  t] = untrimmedEnsembleCDFs[(j + 1) * (*ntest) +  t] - untrimmedEnsembleCDFs[j * (*ntest) +  t];
     }  
     
     /* This loop finds the untrimmed ensemble's mean and variance. */
-    for(i = 1; i <= *ntree; i++) {
-      untrimmedEnsembleMeans[t - 1] += treeMeans[(i - 1) * (*ntest) + t - 1] / (double)(*ntree);
+    for(i = 0; i <= *ntree - 1; i++) {
+      untrimmedEnsembleMeans[t] += treeMeans[i * (*ntest) + t] / (double)(*ntree);
     }
     
     
-    for(i = 1; i <= *ntree; i++) {
-      untrimmedEnsembleVars[t - 1] += (treeMeans[(i - 1) * (*ntest) + t - 1] - untrimmedEnsembleMeans[t - 1]) 
-                                      * (treeMeans[(i - 1) * (*ntest) + t - 1] - untrimmedEnsembleMeans[t - 1]) / (double)(*ntree)
-                                      + treeVars[(i - 1) * (*ntest) + t - 1] / (double)(*ntree);
+    for(i = 0; i <= *ntree - 1; i++) {
+      untrimmedEnsembleVars[t] += (treeMeans[i * (*ntest) + t] - untrimmedEnsembleMeans[t]) 
+                                      * (treeMeans[i * (*ntest) + t] - untrimmedEnsembleMeans[t]) / (double)(*ntree)
+                                      + treeVars[i * (*ntest) + t] / (double)(*ntree);
     }
        
     /* This statement finds the untrimmed ensemble's PIT. */
-   if(ytest[t - 1] < forestSupport[0]) {
-      untrimmedEnsemblePITs[t - 1] = 0;
+   if(ytest[t] < forestSupport[0]) {
+      untrimmedEnsemblePITs[t] = 0;
     } else {
-      indexPIT = *nSupport;
-      while(ytest[t - 1] < forestSupport[indexPIT - 1])  indexPIT -= 1;
-      untrimmedEnsemblePITs[t - 1] = untrimmedEnsembleCDFs[indexPIT * (*ntest) +  t - 1];
+      indexPIT = *nSupport - 1;
+      while(ytest[t] < forestSupport[indexPIT])  indexPIT -= 1;
+      untrimmedEnsemblePITs[t] = untrimmedEnsembleCDFs[indexPIT * (*ntest) +  t];
     }    
-    
     
     /* This loop finds the untrimmed ensemble's quantiles.  */
     zeroIntMA(index, *nQuantiles);
     zeroDoubleMA(untrimmedEnsembleQuantiles, *nQuantiles);
-    for(k = *nQuantiles; k >= 1; k--) {
-      if(k == *nQuantiles) index[k - 1] = *nSupport;
-      else index[k - 1] = index[k];
-      while(uQuantiles[k - 1] <= untrimmedEnsembleCDFs[index[k - 1] * (*ntest) + t - 1]) index[k - 1] -= 1;
-      untrimmedEnsembleQuantiles[k - 1] = forestSupport[index[k - 1]];
-      index[k - 1]++;
+    for(k = *nQuantiles - 1; k >= 0; k--) {
+      if(k == *nQuantiles - 1) index[k] = *nSupport - 1;
+      else index[k] = index[k + 1];
+      /* while condition is u <= cdf value */
+      while((uQuantiles[k] < untrimmedEnsembleCDFs[index[k] * (*ntest) + t]) ||   
+            (fabs(uQuantiles[k] - untrimmedEnsembleCDFs[index[k] * (*ntest) + t]) < *tol)
+           ) index[k] -= 1;
+      untrimmedEnsembleQuantiles[k] = forestSupport[index[k]];
+      index[k]++;
     }  
 
     /* These loops find the untrimmed ensemble's scores: LinQuanS, LogQuanS, RPS and TMS. */
-      zeroDoubleMA(untrimmedEnsembleComponentScores, *nQuantiles*2);
-      for(k = 1; k <= *nQuantiles; k++) {
-        if(untrimmedEnsembleQuantiles[k - 1] <= ytest[t - 1]) 
-          untrimmedEnsembleComponentScores[k - 1] = - uQuantiles[k - 1] * (ytest[t - 1] - untrimmedEnsembleQuantiles[k - 1]);
-        else 
-          untrimmedEnsembleComponentScores[k - 1] = - (1 - uQuantiles[k - 1]) * (untrimmedEnsembleQuantiles[k - 1] - ytest[t - 1]);
-        untrimmedEnsembleScores[t - 1] += untrimmedEnsembleComponentScores[k - 1];   
+    zeroDoubleMA(untrimmedEnsembleComponentScores, *nQuantiles*2);
+    for(k = 0; k <= *nQuantiles - 1; k++) {
+      if(untrimmedEnsembleQuantiles[k] <= ytest[t]) 
+        untrimmedEnsembleComponentScores[k] = - uQuantiles[k] * (ytest[t] - untrimmedEnsembleQuantiles[k]);
+      else 
+        untrimmedEnsembleComponentScores[k] = - (1 - uQuantiles[k]) * (untrimmedEnsembleQuantiles[k] - ytest[t]);
+      untrimmedEnsembleScores[t] += untrimmedEnsembleComponentScores[k];   
       }
     
-      for(k = 1; k <= *nQuantiles; k++) {
-        if(untrimmedEnsembleQuantiles[k - 1] <= ytest[t - 1]) 
-          untrimmedEnsembleComponentScores[*nQuantiles + k - 1] = - uQuantiles[k - 1] * (log(ytest[t - 1]) - log(untrimmedEnsembleQuantiles[k - 1]));
-        else 
-          untrimmedEnsembleComponentScores[*nQuantiles + k - 1] = - (1 - uQuantiles[k - 1]) * (log(untrimmedEnsembleQuantiles[k - 1]) - log(ytest[t - 1]));
-        untrimmedEnsembleScores[(*ntest) + t - 1] += untrimmedEnsembleComponentScores[*nQuantiles + k - 1];   
+    for(k = 0; k <= *nQuantiles - 1; k++) {
+      if(untrimmedEnsembleQuantiles[k] <= ytest[t]) 
+        untrimmedEnsembleComponentScores[*nQuantiles + k] = - uQuantiles[k] * (log(ytest[t]) - log(untrimmedEnsembleQuantiles[k]));
+      else 
+        untrimmedEnsembleComponentScores[*nQuantiles + k] = - (1 - uQuantiles[k]) * (log(untrimmedEnsembleQuantiles[k]) - log(ytest[t]));
+      untrimmedEnsembleScores[(*ntest) + t] += untrimmedEnsembleComponentScores[*nQuantiles + k];   
       }
     
+    for(j = 0; j <= *nSupport - 2; j++) {
+      if(forestSupport[j] < ytest[t])
+        untrimmedEnsembleScores[2 * (*ntest) + t] -= untrimmedEnsembleCDFs[(j + 1) * (*ntest) +  t] * untrimmedEnsembleCDFs[j * (*ntest) +  t];
+      else 
+        untrimmedEnsembleScores[2 * (*ntest) + t] -= (1 - untrimmedEnsembleCDFs[(j + 1) * (*ntest) +  t]) * (1 - untrimmedEnsembleCDFs[(j + 1) * (*ntest) +  t]);
+      }    
     
-      for(j = 1; j <= *nSupport - 1; j++) {
-        if(forestSupport[j - 1] < ytest[t - 1])
-          untrimmedEnsembleScores[2 * (*ntest) + t - 1] -= untrimmedEnsembleCDFs[j * (*ntest) +  t - 1] * untrimmedEnsembleCDFs[j * (*ntest) +  t - 1];
-        else 
-          untrimmedEnsembleScores[2 * (*ntest) + t - 1] -= (1 - untrimmedEnsembleCDFs[j * (*ntest) +  t - 1]) * (1 - untrimmedEnsembleCDFs[j * (*ntest) +  t - 1]);
-      }
-     
-      untrimmedEnsembleScores[3 * (*ntest) + t - 1] = log(1/untrimmedEnsembleVars[t - 1]) - (1/untrimmedEnsembleVars[t - 1]) * (ytest[t - 1]-untrimmedEnsembleMeans[t - 1]) * (ytest[t - 1]-untrimmedEnsembleMeans[t - 1]); 
-      
+    untrimmedEnsembleScores[3 * (*ntest) + t] = log(1/untrimmedEnsembleVars[t]) - (1/untrimmedEnsembleVars[t]) * (ytest[t]-untrimmedEnsembleMeans[t]) * (ytest[t] - untrimmedEnsembleMeans[t]);    
+   
+
     /* ------------------------
        TRIMMED ENSEMBLE OUTPUTS
        ------------------------ */  
@@ -264,139 +284,97 @@ void trimTreesMA(
     zeroDoubleMA(cdfValuesToTrim, *ntree);
     zeroDoubleMA(meansToSort, *ntree);
     zeroIntMA(index2, *ntree);
-    if((*trim < 0.000001) && (*trim > -0.000001)){
-      for(j = 1; j <= *nSupport; j++) {
-        trimmedEnsembleCDFs[j * (*ntest) +  t - 1] = untrimmedEnsembleCDFs[j * (*ntest) +  t - 1];
-        trimmedEnsemblePMFs[(j - 1) * (*ntest) +  t - 1] = trimmedEnsembleCDFs[j * (*ntest) +  t - 1] - trimmedEnsembleCDFs[(j - 1) * (*ntest) +  t - 1];
+    if(fabs(*trim) < *tol){
+      for(j = 0; j <= *nSupport - 1; j++) {
+        trimmedEnsembleCDFs[(j + 1) * (*ntest) +  t] = untrimmedEnsembleCDFs[(j  + 1) * (*ntest) +  t];
+        trimmedEnsemblePMFs[j * (*ntest) +  t] = trimmedEnsembleCDFs[(j + 1) * (*ntest) +  t] - trimmedEnsembleCDFs[j * (*ntest) +  t];
       }
     }
     else {
-      for(i = 1; i <= *ntree; i++) {
-        meansToSort[i - 1] = treeMeans[(i - 1) * (*ntest) + t - 1];
-        index2[i - 1] = i - 1;
+      for(i = 0; i <= *ntree - 1; i++) {
+        meansToSort[i] = treeMeans[i * (*ntest) + t];
+        index2[i] = i;
         }
       rsort_with_index(meansToSort, index2, *ntree);
-      for(j = 1; j <= *nSupport; j++) {
-        for(i = 1; i <= *ntree; i++) {
-          cdfValuesToTrim[i - 1] = treeCDFs[(i - 1) * (*nSupport + 1) + j];
+      for(j = 0; j <= *nSupport - 1; j++) {
+        for(i = 0; i <= *ntree - 1; i++) {
+          cdfValuesToTrim[i] = treeCDFs[i * (*nSupport + 1) + j + 1];
         }
         if(*trimIsExterior) {
           trimmedSum = 0; 
           for(k = lo; k < hi; k++) trimmedSum += cdfValuesToTrim[index2[k]];
-          trimmedEnsembleCDFs[j * (*ntest) +  t - 1] = trimmedSum / (double)(nTrim);
+          trimmedEnsembleCDFs[(j + 1) * (*ntest) +  t] = trimmedSum / (double)(nTrim);
         } else {
             trimmedSum = 0;
             for(k = 0; k < lo; k++) trimmedSum += cdfValuesToTrim[index2[k]];
             for(k = hi - 1; k < *ntree; k++) trimmedSum += cdfValuesToTrim[index2[k]];
-            trimmedEnsembleCDFs[j * (*ntest) +  t - 1] = trimmedSum / (double)(nTrim);
+            trimmedEnsembleCDFs[(j + 1) * (*ntest) +  t] = trimmedSum / (double)(nTrim);
           }
-        trimmedEnsemblePMFs[(j - 1) * (*ntest) +  t - 1] = trimmedEnsembleCDFs[j * (*ntest) +  t - 1] - trimmedEnsembleCDFs[(j - 1) * (*ntest) +  t - 1];
+        trimmedEnsemblePMFs[j * (*ntest) +  t] = trimmedEnsembleCDFs[(j + 1) * (*ntest) +  t] - trimmedEnsembleCDFs[j * (*ntest) +  t];
        }  
     }
     
     /* This loop finds the trimmed ensemble's mean and variance.  */
-     for(j = 1; j <= *nSupport; j++) {
-      trimmedEnsembleMeans[t - 1] += trimmedEnsemblePMFs[(j - 1) * (*ntest) +  t - 1] * forestSupport[j - 1];
-      trimmedEnsembleVars[t - 1] += trimmedEnsemblePMFs[(j - 1) * (*ntest) +  t - 1] * forestSupport[j - 1] * forestSupport[j - 1];
+     for(j = 0; j <= *nSupport - 1; j++) {
+      trimmedEnsembleMeans[t] += trimmedEnsemblePMFs[j * (*ntest) +  t] * forestSupport[j];
+      trimmedEnsembleVars[t] += trimmedEnsemblePMFs[j * (*ntest) +  t] * forestSupport[j] * forestSupport[j];
       }
-      trimmedEnsembleVars[t - 1] -= trimmedEnsembleMeans[t - 1] * trimmedEnsembleMeans[t - 1];
+      trimmedEnsembleVars[t] -= trimmedEnsembleMeans[t] * trimmedEnsembleMeans[t];
     
         
     /* This statement finds the trimmed ensemble's PIT. */
-    if(ytest[t - 1] < forestSupport[0]) {
-      trimmedEnsemblePITs[t - 1] = 0;
+    if(ytest[t] < forestSupport[0]) {
+      trimmedEnsemblePITs[t] = 0;
     } else {
-      indexPIT = *nSupport;
-      while(ytest[t - 1] < forestSupport[indexPIT - 1])  indexPIT -= 1;
-      trimmedEnsemblePITs[t - 1] = trimmedEnsembleCDFs[indexPIT * (*ntest) +  t - 1];
+      indexPIT = *nSupport - 1;
+      while(ytest[t] < forestSupport[indexPIT])  indexPIT -= 1;
+      trimmedEnsemblePITs[t] = trimmedEnsembleCDFs[(indexPIT + 1) * (*ntest) +  t];
     }
       
     /* This loop finds the trimmed ensemble's quantiles. */ 
     zeroIntMA(index, *nQuantiles);
     zeroDoubleMA(trimmedEnsembleQuantiles, *nQuantiles);
-    for(k = *nQuantiles; k >= 1; k--) {
-      if(k == *nQuantiles) index[k - 1] = *nSupport;
-      else index[k - 1] = index[k];
-      while(uQuantiles[k - 1] <= trimmedEnsembleCDFs[index[k - 1] * (*ntest) + t - 1]) index[k - 1] -= 1;
-      trimmedEnsembleQuantiles[k - 1] = forestSupport[index[k - 1]];
-      index[k - 1]++;
+    for(k = *nQuantiles - 1; k >= 0; k--) {
+      if(k == *nQuantiles - 1) index[k] = *nSupport - 1;
+      else index[k] = index[k + 1];
+      /* while condition is u <= cdf value */
+      while((uQuantiles[k] < trimmedEnsembleCDFs[index[k] * (*ntest) + t]) || 
+            (fabs(uQuantiles[k] - trimmedEnsembleCDFs[index[k] * (*ntest) + t]) < *tol)
+           ) index[k] -= 1;
+      trimmedEnsembleQuantiles[k] = forestSupport[index[k]];
+      index[k]++;
     } 
   
     /* These loops find the trimmed ensemble's scores: LinQuanS, LogQuanS, RPS and TMS. */
-      zeroDoubleMA(trimmedEnsembleComponentScores, *nQuantiles*2);
-      for(k = 1; k <= *nQuantiles; k++) {
-        if(trimmedEnsembleQuantiles[k - 1] <= ytest[t - 1]) 
-          trimmedEnsembleComponentScores[k - 1] = - uQuantiles[k - 1] * (ytest[t - 1] - trimmedEnsembleQuantiles[k - 1]);
-        else 
-          trimmedEnsembleComponentScores[k - 1] = - (1 - uQuantiles[k - 1]) * (trimmedEnsembleQuantiles[k - 1] - ytest[t - 1]);
-        trimmedEnsembleScores[t - 1] += trimmedEnsembleComponentScores[k - 1];   
+    zeroDoubleMA(trimmedEnsembleComponentScores, *nQuantiles*2);
+    for(k = 0; k <= *nQuantiles - 1; k++) {
+      if(trimmedEnsembleQuantiles[k] <= ytest[t]) 
+        trimmedEnsembleComponentScores[k] = - uQuantiles[k] * (ytest[t] - trimmedEnsembleQuantiles[k]);
+      else 
+        trimmedEnsembleComponentScores[k] = - (1 - uQuantiles[k]) * (trimmedEnsembleQuantiles[k] - ytest[t]);
+      trimmedEnsembleScores[t] += trimmedEnsembleComponentScores[k];   
       }
-    
-      for(k = 1; k <= *nQuantiles; k++) {
-        if(trimmedEnsembleQuantiles[k - 1] <= ytest[t - 1]) 
-          trimmedEnsembleComponentScores[*nQuantiles + k - 1] = - uQuantiles[k - 1] * (log(ytest[t - 1]) - log(trimmedEnsembleQuantiles[k - 1]));
-        else 
-          trimmedEnsembleComponentScores[*nQuantiles + k - 1] = - (1 - uQuantiles[k - 1]) * (log(trimmedEnsembleQuantiles[k - 1]) - log(ytest[t - 1]));
-        trimmedEnsembleScores[(*ntest) + t - 1] += trimmedEnsembleComponentScores[*nQuantiles + k - 1];   
-      }
-    
-      for(j = 1; j <= *nSupport - 1; j++) {
-        if(forestSupport[j - 1] < ytest[t - 1])
-          trimmedEnsembleScores[2 * (*ntest) + t - 1] -= trimmedEnsembleCDFs[j * (*ntest) +  t - 1] * trimmedEnsembleCDFs[j * (*ntest) +  t - 1];
-        else 
-          trimmedEnsembleScores[2 * (*ntest) + t - 1] -= (1 - trimmedEnsembleCDFs[j * (*ntest) +  t - 1]) * (1 - trimmedEnsembleCDFs[j * (*ntest) +  t - 1]);
-      }  
-       
-     trimmedEnsembleScores[3 * (*ntest) + t - 1] = log(1/trimmedEnsembleVars[t - 1]) - (1/trimmedEnsembleVars[t - 1]) * (ytest[t - 1]-trimmedEnsembleMeans[t - 1]) * (ytest[t - 1]-trimmedEnsembleMeans[t - 1]); 
-    
         
-    /* --------------------------------
-       RANDOM FOREST'S ENSEMBLE OUTPUTS
-       -------------------------------- */
-    
-    /* This loop finds the random forest's ensemble quantiles. */ 
-    zeroIntMA(index, *nQuantiles);
-    zeroDoubleMA(rfClassEnsembleQuantiles, *nQuantiles);
-    for(k = *nQuantiles; k >= 1; k--) {
-      if(k == *nQuantiles) index[k - 1] = *nSupport;
-      else index[k - 1] = index[k];
-      while(uQuantiles[k - 1] <= rfClassEnsembleCDFs[index[k - 1] * (*ntest) + t - 1]) index[k - 1] -= 1;
-      rfClassEnsembleQuantiles[k - 1] = forestSupport[index[k - 1]];
-      index[k - 1]++;
-     } 
-  
-    /* These loops find the rf's scores: LinQuanS, LogQuanS and RPS. */
-    
-    zeroDoubleMA(rfClassEnsembleComponentScores, *nQuantiles*2);
-    for(k = 1; k <= *nQuantiles; k++) {
-      if( rfClassEnsembleQuantiles[k - 1] <= ytest[t - 1]) 
-        rfClassEnsembleComponentScores[k - 1] = - uQuantiles[k - 1] * (ytest[t - 1] - rfClassEnsembleQuantiles[k - 1]);
+    for(k = 0; k <= *nQuantiles - 1; k++) {
+      if(trimmedEnsembleQuantiles[k] <= ytest[t]) 
+        trimmedEnsembleComponentScores[*nQuantiles + k] = - uQuantiles[k] * (log(ytest[t]) - log(trimmedEnsembleQuantiles[k]));
       else 
-        rfClassEnsembleComponentScores[k - 1] = - (1 - uQuantiles[k - 1]) * (rfClassEnsembleQuantiles[k - 1] - ytest[t - 1]);
-      rfClassEnsembleScores[t - 1] += rfClassEnsembleComponentScores[k - 1];   
+        trimmedEnsembleComponentScores[*nQuantiles + k] = - (1 - uQuantiles[k]) * (log(trimmedEnsembleQuantiles[k]) - log(ytest[t]));
+      trimmedEnsembleScores[(*ntest) + t] += trimmedEnsembleComponentScores[*nQuantiles + k];   
       }
     
-    for(k = 1; k <= *nQuantiles; k++) {
-      if(rfClassEnsembleQuantiles[k - 1] <= ytest[t - 1]) 
-        rfClassEnsembleComponentScores[*nQuantiles + k - 1] = - uQuantiles[k - 1] * (log(ytest[t - 1]) - log(rfClassEnsembleQuantiles[k - 1]));
+    for(j = 0; j <= *nSupport - 2; j++) {
+      if(forestSupport[j] < ytest[t])
+        trimmedEnsembleScores[2 * (*ntest) + t] -= trimmedEnsembleCDFs[(j + 1) * (*ntest) +  t] * trimmedEnsembleCDFs[(j + 1) * (*ntest) +  t];
       else 
-        rfClassEnsembleComponentScores[*nQuantiles + k - 1] = - (1 - uQuantiles[k - 1]) * (log(rfClassEnsembleQuantiles[k - 1]) - log(ytest[t - 1]));
-      rfClassEnsembleScores[(*ntest) + t - 1] += rfClassEnsembleComponentScores[*nQuantiles + k - 1];   
-      }
-    
-    for(j = 1; j <= *nSupport - 1; j++) {
-      if(forestSupport[j - 1] < ytest[t - 1])
-        rfClassEnsembleScores[2 * (*ntest) + t - 1] -= rfClassEnsembleCDFs[j * (*ntest) +  t - 1] * rfClassEnsembleCDFs[j * (*ntest) +  t - 1];
-      else 
-        rfClassEnsembleScores[2 * (*ntest) + t - 1] -= (1 - rfClassEnsembleCDFs[j * (*ntest) +  t - 1]) * (1 - rfClassEnsembleCDFs[j * (*ntest) +  t - 1]);
+        trimmedEnsembleScores[2 * (*ntest) + t] -= (1 - trimmedEnsembleCDFs[(j + 1) * (*ntest) +  t]) * (1 - trimmedEnsembleCDFs[(j + 1) * (*ntest) +  t]);
       }  
-  
+      
+      trimmedEnsembleScores[3 * (*ntest) + t] = log(1/trimmedEnsembleVars[t]) - (1/trimmedEnsembleVars[t]) * (ytest[t]-trimmedEnsembleMeans[t]) * (ytest[t]-trimmedEnsembleMeans[t]);
+          
+
   }  /* End of loop over test rows. */
 
 
-}/* End of function. */
+} /* End of function. */
 
-
-
-
-  
